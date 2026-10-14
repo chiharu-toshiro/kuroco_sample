@@ -1,62 +1,21 @@
-name: Deploy to Sakura
+# FTPS接続テスト
+- name: Test FTPS connection
+  env:
+      SAKURA_HOST: ${{ secrets.SAKURA_HOST }}
+      SAKURA_USER: ${{ secrets.SAKURA_USER }}
+      SAKURA_PASSWORD: ${{ secrets.SAKURA_PASSWORD }}
+  run: |
+      sudo apt-get update
+      sudo apt-get install -y lftp
 
-on:
-    workflow_dispatch:
-
-permissions:
-    contents: read
-
-jobs:
-    deploy:
-        name: Build and deploy to Sakura
-        runs-on: ubuntu-latest
-
-        steps:
-            # GitHubからソースコードを取得
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            # 既存のbuild.ymlと同じNode.js 18を使用
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "18.x"
-                  cache: "npm"
-
-            # 依存パッケージをインストール
-            - name: Install dependencies
-              run: npm ci
-
-            # Nuxt3の静的ファイルを生成
-            - name: Generate static site
-              run: npm run generate
-              env:
-                  NUXT_APP_BASE_URL: /kuroco-test/
-
-            # 生成ファイルの確認
-            - name: Check generated files
-              run: |
-                  test -f .output/public/index.html
-                  ls -la .output/public
-
-            # FTPSでさくらサーバーへアップロード
-            - name: Deploy via FTPS
-              env:
-                  SAKURA_HOST: ${{ secrets.SAKURA_HOST }}
-                  SAKURA_USER: ${{ secrets.SAKURA_USER }}
-                  SAKURA_PASSWORD: ${{ secrets.SAKURA_PASSWORD }}
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y lftp
-
-                  lftp -u "$SAKURA_USER","$SAKURA_PASSWORD" "$SAKURA_HOST" <<'EOF'
-                  set ftp:ssl-force true
-                  set ftp:ssl-protect-data true
-                  set ssl:verify-certificate true
-                  set net:max-retries 2
-                  set net:timeout 30
-
-                  mkdir -p www/kuroco-test
-                  mirror -R --verbose --parallel=2 .output/public/ www/kuroco-test/
-                  bye
-                  EOF
+      lftp -u "$SAKURA_USER","$SAKURA_PASSWORD" \
+        -e "
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate true
+          set net:max-retries 1
+          set net:timeout 15
+          pwd
+          cls -l
+          bye
+        " "ftp://$SAKURA_HOST:21"
