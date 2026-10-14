@@ -1,21 +1,36 @@
-# FTPS接続テスト
-- name: Test FTPS connection
-  env:
-      SAKURA_HOST: ${{ secrets.SAKURA_HOST }}
-      SAKURA_USER: ${{ secrets.SAKURA_USER }}
-      SAKURA_PASSWORD: ${{ secrets.SAKURA_PASSWORD }}
-  run: |
-      sudo apt-get update
-      sudo apt-get install -y lftp
+name: Test Sakura FTPS connection
 
-      lftp -u "$SAKURA_USER","$SAKURA_PASSWORD" \
-        -e "
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set ssl:verify-certificate true
-          set net:max-retries 1
-          set net:timeout 15
-          pwd
-          cls -l
-          bye
-        " "ftp://$SAKURA_HOST:21"
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        name: Test FTPS connection
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Install lftp
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y lftp
+
+            - name: Test FTPS connection
+              env:
+                  SAKURA_HOST: ${{ secrets.SAKURA_HOST }}
+                  SAKURA_USER: ${{ secrets.SAKURA_USER }}
+                  SAKURA_PASSWORD: ${{ secrets.SAKURA_PASSWORD }}
+              run: |
+                  lftp -u "$SAKURA_USER","$SAKURA_PASSWORD" \
+                    -e "
+                      set ftp:ssl-force true
+                      set ftp:ssl-protect-data true
+                      set ssl:verify-certificate true
+                      set net:max-retries 1
+                      set net:timeout 15
+                      pwd
+                      cls -l
+                      bye
+                    " "ftp://$SAKURA_HOST:21"
