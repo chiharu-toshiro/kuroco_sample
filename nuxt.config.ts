@@ -31,7 +31,8 @@ export default defineNuxtConfig({
             link: [
                 { rel: 'icon', type: 'image/svg+xml', href: '/icon_kuroco.svg' },
             ]
-        }
+        },
+        baseURL: process.env.NUXT_APP_BASE_URL || '/'
     },
 
     devtools: { enabled: true },
