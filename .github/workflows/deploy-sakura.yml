@@ -84,7 +84,6 @@ jobs:
                   set net:timeout 30
                   set cmd:fail-exit true
 
-                  mkdir -p www/kuroco-test
                   mirror -R --verbose --parallel=2 .output/public/ www/kuroco-test/
 
                   bye
