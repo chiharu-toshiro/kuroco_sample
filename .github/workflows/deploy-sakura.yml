@@ -1,4 +1,4 @@
-name: Test Sakura FTPS connection
+name: Deploy to Sakura
 
 on:
     workflow_dispatch:
@@ -7,30 +7,85 @@ permissions:
     contents: read
 
 jobs:
-    test:
-        name: Test FTPS connection
+    deploy:
+        name: Build and deploy to Sakura
         runs-on: ubuntu-latest
 
         steps:
+            # ソースコードを取得
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            # Node.jsをセットアップ
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18.x"
+                  cache: "npm"
+
+            # 依存パッケージをインストール
+            - name: Install dependencies
+              run: npm ci
+
+            # Nuxt3の静的ファイルを生成
+            - name: Generate static site
+              run: npm run generate
+              env:
+                  NUXT_APP_BASE_URL: /kuroco-test/
+
+            # 生成結果を確認
+            - name: Check generated files
+              run: |
+                  test -d .output/public
+                  ls -la .output/public
+
+            # FTPS転送ツールをインストール
             - name: Install lftp
               run: |
                   sudo apt-get update
                   sudo apt-get install -y lftp
 
-            - name: Test FTPS connection
+            # FTPS接続と転送先を確認
+            - name: Check FTPS connection
               env:
                   SAKURA_HOST: ${{ secrets.SAKURA_HOST }}
                   SAKURA_USER: ${{ secrets.SAKURA_USER }}
                   SAKURA_PASSWORD: ${{ secrets.SAKURA_PASSWORD }}
               run: |
                   lftp -u "$SAKURA_USER","$SAKURA_PASSWORD" \
-                    -e "
-                      set ftp:ssl-force true
-                      set ftp:ssl-protect-data true
-                      set ssl:verify-certificate true
-                      set net:max-retries 1
-                      set net:timeout 15
-                      pwd
-                      cls -l
-                      bye
-                    " "ftp://$SAKURA_HOST:21"
+                    "ftp://$SAKURA_HOST:21" <<'EOF'
+                  set ftp:ssl-force true
+                  set ftp:ssl-protect-data true
+                  set ssl:verify-certificate true
+                  set ftp:passive-mode true
+                  set net:max-retries 2
+                  set net:timeout 30
+                  set cmd:fail-exit true
+
+                  debug 2
+                  cls -l
+                  bye
+                  EOF
+
+            # FTPSでアップロード
+            - name: Deploy via FTPS
+              env:
+                  SAKURA_HOST: ${{ secrets.SAKURA_HOST }}
+                  SAKURA_USER: ${{ secrets.SAKURA_USER }}
+                  SAKURA_PASSWORD: ${{ secrets.SAKURA_PASSWORD }}
+              run: |
+                  lftp -u "$SAKURA_USER","$SAKURA_PASSWORD" \
+                    "ftp://$SAKURA_HOST:21" <<'EOF'
+                  set ftp:ssl-force true
+                  set ftp:ssl-protect-data true
+                  set ssl:verify-certificate true
+                  set ftp:passive-mode true
+                  set net:max-retries 2
+                  set net:timeout 30
+                  set cmd:fail-exit true
+
+                  mkdir -p www/kuroco-test
+                  mirror -R --verbose --parallel=2 .output/public/ www/kuroco-test/
+
+                  bye
+                  EOF
